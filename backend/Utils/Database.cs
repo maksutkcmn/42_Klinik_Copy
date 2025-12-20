@@ -39,5 +39,19 @@ namespace Utils
 
             return response;
         }
+
+        public async Task<DoctorModel?> CreateAppointment(AppointmentModel appointment)
+        {
+            await context.appointments.AddAsync(appointment);
+
+            int rowsAffected = await context.SaveChangesAsync();
+
+            if (rowsAffected == 0)
+                return null;
+
+            var response = await context.doctors.FindAsync(appointment.id);
+
+            return response;
+        }
     }
 }

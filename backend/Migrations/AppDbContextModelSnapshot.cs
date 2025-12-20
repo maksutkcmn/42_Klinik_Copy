@@ -21,6 +21,33 @@ namespace backend.Migrations
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
 
+            modelBuilder.Entity("Models.AppointmentModel", b =>
+                {
+                    b.Property<int>("id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("id"));
+
+                    b.Property<string>("date")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("doctorId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("time")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("userId")
+                        .HasColumnType("int");
+
+                    b.HasKey("id");
+
+                    b.ToTable("appointments");
+                });
+
             modelBuilder.Entity("Models.DoctorModel", b =>
                 {
                     b.Property<int>("id")

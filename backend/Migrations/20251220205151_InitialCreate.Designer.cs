@@ -11,8 +11,8 @@ using Services;
 namespace backend.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20251220140512_AddDoctorTable")]
-    partial class AddDoctorTable
+    [Migration("20251220205151_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -23,6 +23,33 @@ namespace backend.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
+
+            modelBuilder.Entity("Models.AppointmentModel", b =>
+                {
+                    b.Property<int>("id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("id"));
+
+                    b.Property<string>("date")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("doctorId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("time")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<int>("userId")
+                        .HasColumnType("int");
+
+                    b.HasKey("id");
+
+                    b.ToTable("appointments");
+                });
 
             modelBuilder.Entity("Models.DoctorModel", b =>
                 {
@@ -71,6 +98,9 @@ namespace backend.Migrations
 
                     b.Property<string>("phone")
                         .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("role")
                         .HasColumnType("longtext");
 
                     b.Property<string>("surname")

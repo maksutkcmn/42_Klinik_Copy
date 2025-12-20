@@ -11,8 +11,10 @@ builder.Services.AddOpenApi();
 
 builder.Services.AddControllers();
 
+// DI
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddScoped<Database>();
+builder.Services.AddScoped<DoctorCheck>();
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["SecretKey"];
