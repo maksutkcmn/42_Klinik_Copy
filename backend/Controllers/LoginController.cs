@@ -1,7 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Models;
 using Services;
+using Utils;
+using Enums;
 
 namespace Controllers
 {
@@ -9,13 +10,13 @@ namespace Controllers
     [Route("api/[controller]")]
     public class LoginController : ControllerBase
     {
-        private readonly AppDbContext context;
         private readonly JwtService jwtService;
+        private readonly Database context;
 
-        public LoginController(AppDbContext _context, JwtService _jwtService)
+        public LoginController(JwtService _jwtService, Database _context)
         {
-            context = _context;
             jwtService = _jwtService;
+            context = _context;
         }
 
         [HttpPost]
@@ -29,7 +30,7 @@ namespace Controllers
                 if (string.IsNullOrWhiteSpace(login.phone) || string.IsNullOrWhiteSpace(login.password))
                     return BadRequest(new {message = "Phone and Password is Required"});
 
-                var user = await context.users.FirstOrDefaultAsync(u => u.phone == login.phone);
+                var user = await context.GetUser(login.phone, UserSearchType.Phone);
 
                 if (user == null)
                     return BadRequest(new {message = "User not Found"});

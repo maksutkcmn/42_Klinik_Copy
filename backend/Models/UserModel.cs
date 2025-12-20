@@ -4,6 +4,7 @@ namespace Models
 {
     public class UserModel
     {
+        [Key]
         public int id { get; set; }
 
         [Required(ErrorMessage = "Name is Required")]

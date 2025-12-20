@@ -11,5 +11,6 @@ namespace Services
         }
 
         public DbSet<UserModel> users { get; set; }
+        public DbSet<DoctorModel> doctors { get; set; }
     }
 }
