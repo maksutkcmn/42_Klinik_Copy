@@ -42,6 +42,9 @@ public class RegisterController : ControllerBase
             }
             user.password = BCrypt.Net.BCrypt.HashPassword(user.password, 10);
 
+            if (user.role == null)
+                user.role = "member";
+
             await context.users.AddAsync(user);
 
             int rowsAffected = await context.SaveChangesAsync();
@@ -63,6 +66,7 @@ public class RegisterController : ControllerBase
                     response?.surname,
                     response?.email,
                     response?.phone,
+                    response?.role
                 }
             });
         }

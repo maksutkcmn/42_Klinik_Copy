@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Models;
@@ -29,6 +30,25 @@ public class AddDoctorController : ControllerBase
                 || string.IsNullOrWhiteSpace(doctor.gender))
             {
                 return BadRequest(new {message = "Bad Input"});
+            }
+
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized(new { message = "User not authenticated" });
+            }
+
+            var user = await context.GetUser(userId, Enums.UserSearchType.Id);
+
+            if (user == null)
+            {
+                return Unauthorized(new { message = "User not found" });
+            }
+
+            if (user.role != "admin")
+            {
+                return StatusCode(403, new { message = "Only admins can add doctors" });
             }
 
             var response = await context.CreateDoctor(doctor);

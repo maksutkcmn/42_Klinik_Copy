@@ -21,6 +21,8 @@ namespace Models
 
         [Required(ErrorMessage = "Password is Required")]
         public string? password { get; set;}
+
+        public string? role { get; set;}
     }
 
     public class LoginModel
