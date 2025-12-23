@@ -40,6 +40,21 @@ namespace Utils
             return response;
         }
 
+        public async Task<DoctorModel?> GetDoctor(int id)
+        {
+            return await context.doctors.FirstOrDefaultAsync(u => u.id == id);
+        }
+
+        public async Task<List<DoctorModel>> GetDoctors()
+        {
+            return await context.doctors.ToListAsync();
+        }
+
+        public async Task<List<DoctorModel>> GetDoctorsByExpertise(string expertise)
+        {
+            return await context.doctors.Where(u => u.expertise == expertise).ToListAsync();
+        }
+
         public async Task<AppointmentModel?> CreateAppointment(AppointmentModel appointment)
         {
             await context.appointments.AddAsync(appointment);
