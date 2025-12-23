@@ -128,3 +128,6 @@ C:\Users\Maksut\Desktop\42_Klinik_Copy\backend\bin\Debug\net9.0\ru\Microsoft.Cod
 C:\Users\Maksut\Desktop\42_Klinik_Copy\backend\bin\Debug\net9.0\tr\Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.resources.dll
 C:\Users\Maksut\Desktop\42_Klinik_Copy\backend\bin\Debug\net9.0\zh-Hans\Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.resources.dll
 C:\Users\Maksut\Desktop\42_Klinik_Copy\backend\bin\Debug\net9.0\zh-Hant\Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.resources.dll
+C:\Users\Maksut\Desktop\42_Klinik_Copy\backend\bin\Debug\net9.0\Pipelines.Sockets.Unofficial.dll
+C:\Users\Maksut\Desktop\42_Klinik_Copy\backend\bin\Debug\net9.0\StackExchange.Redis.dll
+C:\Users\Maksut\Desktop\42_Klinik_Copy\backend\bin\Debug\net9.0\System.IO.Hashing.dll

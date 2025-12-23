@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Models;
+using Services;
 using Utils;
 
 namespace Controllers;
@@ -11,10 +12,12 @@ namespace Controllers;
 public class AddDoctorController : ControllerBase
 {
     private readonly Database context;
+    private readonly IRedisService redisService;
 
-    public AddDoctorController(Database _context)
+    public AddDoctorController(Database _context, IRedisService _redisService)
     {
         context = _context;
+        redisService = _redisService;
     }
 
     [HttpPost]
@@ -52,6 +55,13 @@ public class AddDoctorController : ControllerBase
             }
 
             var response = await context.CreateDoctor(doctor);
+
+            // Invalidate all doctor-related caches
+            await redisService.DeleteByPatternAsync("doctors:*");
+            if (response?.id != null)
+            {
+                await redisService.DeleteAsync($"doctor:{response.id}");
+            }
 
             return Ok(new
             {

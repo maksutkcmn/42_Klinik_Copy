@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
+using Services;
 using Utils;
 
 namespace Controllers;
@@ -9,10 +10,12 @@ namespace Controllers;
 public class DeleteAppointmentController : ControllerBase
 {
     private readonly Database context;
+    private readonly IRedisService redisService;
 
-    public DeleteAppointmentController(Database _context)
+    public DeleteAppointmentController(Database _context, IRedisService _redisService)
     {
         context = _context;
+        redisService = _redisService;
     }
 
     [HttpDelete]
@@ -34,6 +37,10 @@ public class DeleteAppointmentController : ControllerBase
                 return StatusCode(403, new {message = "This Appointment not your"});
 
             await context.DeleteAppoinment(appointment);
+
+            // Invalidate appointment caches
+            await redisService.DeleteByPatternAsync("appointments:*");
+            await redisService.DeleteAsync($"appointments:user:{userId}");
 
             return Ok(new
             {

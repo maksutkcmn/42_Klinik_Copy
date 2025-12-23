@@ -15,6 +15,7 @@ builder.Services.AddControllers();
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddScoped<Database>();
 builder.Services.AddScoped<DoctorCheck>();
+builder.Services.AddSingleton<IRedisService, RedisService>();
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["SecretKey"];
