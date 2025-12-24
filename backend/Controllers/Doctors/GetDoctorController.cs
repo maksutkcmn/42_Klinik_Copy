@@ -29,7 +29,6 @@ public class GetDoctorController : ControllerBase
             var cacheKey = $"doctor:{id}";
             var expirationDays = configuration.GetValue<int>("Redis:DefaultExpirationDays");
 
-            // Try to get from cache first
             var cachedDoctor = await redisService.GetAsync<object>(cacheKey);
 
             if (cachedDoctor != null)
@@ -43,13 +42,11 @@ public class GetDoctorController : ControllerBase
                 });
             }
 
-            // If not in cache, get from database
             var doctor = await context.GetDoctor(id);
 
             if (doctor == null)
                 return NotFound(new {message = "Doctor not Found"});
 
-            // Cache the result for 7 days
             await redisService.SetAsync(cacheKey, doctor, TimeSpan.FromDays(expirationDays));
 
             return Ok(new
@@ -78,7 +75,6 @@ public class GetDoctorController : ControllerBase
             var cacheKey = "doctors:all";
             var expirationDays = configuration.GetValue<int>("Redis:DefaultExpirationDays");
 
-            // Try to get from cache first
             var cachedDoctors = await redisService.GetAsync<List<object>>(cacheKey);
 
             if (cachedDoctors != null)
@@ -92,13 +88,11 @@ public class GetDoctorController : ControllerBase
                 });
             }
 
-            // If not in cache, get from database
             var doctor = await context.GetDoctors();
 
             if (doctor.Count == 0)
                 return NotFound(new {message = "Doctors not Found"});
 
-            // Cache the result for 7 days
             await redisService.SetAsync(cacheKey, doctor, TimeSpan.FromDays(expirationDays));
 
             return Ok(new
@@ -127,7 +121,6 @@ public class GetDoctorController : ControllerBase
             var cacheKey = $"doctors:expertise:{expertise}";
             var expirationDays = configuration.GetValue<int>("Redis:DefaultExpirationDays");
 
-            // Try to get from cache first
             var cachedDoctors = await redisService.GetAsync<List<object>>(cacheKey);
 
             if (cachedDoctors != null)
@@ -141,13 +134,11 @@ public class GetDoctorController : ControllerBase
                 });
             }
 
-            // If not in cache, get from database
             var doctor = await context.GetDoctorsByExpertise(expertise);
 
             if (doctor.Count == 0)
                 return NotFound(new {message = "Doctors not Found"});
 
-            // Cache the result for 7 days
             await redisService.SetAsync(cacheKey, doctor, TimeSpan.FromDays(expirationDays));
 
             return Ok(new
@@ -155,6 +146,49 @@ public class GetDoctorController : ControllerBase
                 status = "True",
                 message = "Doctor Found",
                 doctor
+            });
+        }
+        catch (System.Exception e)
+        {
+            return StatusCode(500, new
+            {
+                message = "Server Error",
+                error = e.Message
+            });
+        }
+    }
+
+    [HttpGet("doctor/appointments/{doctorid}")]
+    [Authorize]
+    public async Task<IActionResult> GetDoctorAppointments(int doctorid)
+    {
+        try
+        {
+            var cacheKey = $"appointments:doctor:{doctorid}";
+            var expirationDays = configuration.GetValue<int>("Redis:DefaultExpirationDays");
+
+            var cachedAppointments = await redisService.GetAsync<List<object>>(cacheKey);
+
+            if (cachedAppointments != null)
+            {
+                return Ok(new
+                {
+                    status = "True",
+                    message = "Process Succesfuly",
+                    appointments = cachedAppointments,
+                    fromCache = true
+                });
+            }
+
+            var appointments = await context.GetAppoinmentsByDoctorId(doctorid);
+
+            await redisService.SetAsync(cacheKey, appointments, TimeSpan.FromDays(expirationDays));
+
+            return Ok(new
+            {
+                status = "True",
+                message = "Process Succesfuly",
+                appointments
             });
         }
         catch (System.Exception e)

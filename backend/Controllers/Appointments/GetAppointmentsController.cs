@@ -36,7 +36,6 @@ public class GetAppointmentsController : ControllerBase
             var cacheKey = $"appointments:user:{userId}";
             var expirationDays = configuration.GetValue<int>("Redis:DefaultExpirationDays");
 
-            // Try to get from cache first
             var cachedAppointments = await redisService.GetAsync<List<object>>(cacheKey);
 
             if (cachedAppointments != null)
@@ -59,7 +58,6 @@ public class GetAppointmentsController : ControllerBase
                 return NotFound(new {message = "User not have a appointment"});
             }
 
-            // Cache the result for 7 days
             await redisService.SetAsync(cacheKey, appointments, TimeSpan.FromDays(expirationDays));
 
             return Ok(new

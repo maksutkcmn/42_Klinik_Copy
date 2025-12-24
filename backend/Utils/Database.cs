@@ -74,6 +74,11 @@ namespace Utils
             return await context.appointments.Where(u => u.userId.ToString() == userId).ToListAsync();
         }
 
+        public async Task<List<AppointmentModel>> GetAppoinmentsByDoctorId(int doctorId)
+        {
+            return await context.appointments.Where(u => u.doctorId == doctorId).ToListAsync();
+        }
+
         public async Task<AppointmentModel?> GetAppoinment(int id)
         {
             return await context.appointments.FirstOrDefaultAsync(u => u.id == id);
