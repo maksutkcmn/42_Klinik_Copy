@@ -90,3 +90,9 @@ export interface GetDoctorAppointmentsResponse {
   appointments: Appointment[];
   fromCache?: boolean;
 }
+
+export interface GetUserRoleResponse {
+  status: string;
+  message: string;
+  userRole: string;
+}

@@ -1,5 +1,5 @@
 import './style.css'
-import { TokenManager, getAppointments, getDoctors, ApiError } from './api'
+import { TokenManager, getAppointments, getDoctors, ApiError, sendChatMessage, getUserRole } from './api'
 import type { Appointment, Doctor } from './types'
 
 // Check if user is authenticated
@@ -11,6 +11,19 @@ if (!TokenManager.isAuthenticated()) {
 
 async function initApp() {
   const app = document.querySelector<HTMLDivElement>('#app')!;
+
+  // Check user role
+  let isAdmin = false;
+  try {
+    const roleResponse = await getUserRole();
+    console.log('User role response:', roleResponse);
+    console.log('User role:', roleResponse.userRole);
+    // Case-insensitive check
+    isAdmin = roleResponse.userRole?.toLowerCase() === 'admin';
+    console.log('Is admin:', isAdmin);
+  } catch (error) {
+    console.error('Failed to get user role:', error);
+  }
 
   app.innerHTML = `
     <div style="min-height: 100vh; background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%); padding: 0;">
@@ -25,6 +38,11 @@ async function initApp() {
             <button id="newAppointmentBtn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border: none; padding: 12px 28px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);">
               + Yeni Randevu
             </button>
+            ${isAdmin ? `
+            <button id="adminPanelBtn" style="background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%); color: #fff; border: none; padding: 12px 28px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);">
+              ⚙️ Admin Panel
+            </button>
+            ` : ''}
             <button id="logoutBtn" style="background: rgba(220, 53, 69, 0.1); color: #dc3545; border: 2px solid #dc3545; padding: 12px 28px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
               Çıkış Yap
             </button>
@@ -48,16 +66,74 @@ async function initApp() {
           </div>
         </div>
       </main>
+
+      <!-- Chatbot Widget -->
+      <div id="chatbotWidget" style="position: fixed; bottom: 30px; right: 30px; z-index: 2000;">
+        <!-- Chatbot Container (Hidden by default) -->
+        <div id="chatbotContainer" style="display: none; width: 380px; height: 550px; background: rgba(26, 26, 46, 0.98); backdrop-filter: blur(20px); border: 1px solid #3a3a5a; border-radius: 20px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); margin-bottom: 20px; flex-direction: column; overflow: hidden;">
+          <!-- Chatbot Header -->
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #3a3a5a;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="font-size: 24px;">🤖</div>
+              <div>
+                <div style="color: #fff; font-weight: 600; font-size: 16px;">Sağlık Asistanı</div>
+                <div style="color: rgba(255,255,255,0.8); font-size: 12px;">Nasıl yardımcı olabilirim?</div>
+              </div>
+            </div>
+            <button id="closeChatBtn" style="background: rgba(255,255,255,0.2); border: none; color: #fff; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;">×</button>
+          </div>
+
+          <!-- Chatbot Messages -->
+          <div id="chatMessages" style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+            <div style="display: flex; gap: 12px; align-items: flex-start;">
+              <div style="font-size: 24px; flex-shrink: 0;">🤖</div>
+              <div style="background: rgba(102, 126, 234, 0.2); color: #e0e0ff; padding: 12px 16px; border-radius: 12px; font-size: 14px; max-width: 80%; border: 1px solid rgba(102, 126, 234, 0.3);">
+                Merhaba! Size nasıl yardımcı olabilirim?
+              </div>
+            </div>
+          </div>
+
+          <!-- Chatbot Input -->
+          <div style="border-top: 1px solid #3a3a5a; padding: 16px; background: rgba(20, 20, 40, 0.8);">
+            <div style="display: flex; gap: 8px;">
+              <input id="chatInput" type="text" placeholder="Mesajınızı yazın..." style="flex: 1; background: rgba(40, 40, 60, 0.8); border: 1px solid #3a3a5a; color: #fff; padding: 12px 16px; border-radius: 12px; font-size: 14px; outline: none; transition: all 0.3s ease;">
+              <button id="sendChatBtn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: #fff; padding: 12px 20px; border-radius: 12px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">Gönder</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chatbot Toggle Button -->
+        <button id="chatbotToggle" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: #fff; width: 64px; height: 64px; border-radius: 50%; cursor: pointer; font-size: 28px; box-shadow: 0 8px 24px rgba(102, 126, 234, 0.5); transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; margin-left: auto;">
+          💬
+        </button>
+      </div>
     </div>
   `;
 
   const logoutBtn = document.getElementById('logoutBtn')!;
   const newAppointmentBtn = document.getElementById('newAppointmentBtn')!;
+  const adminPanelBtn = document.getElementById('adminPanelBtn');
 
   logoutBtn.addEventListener('click', logout);
   newAppointmentBtn.addEventListener('click', () => {
     window.location.href = '/appointment.html';
   });
+
+  if (adminPanelBtn) {
+    adminPanelBtn.addEventListener('click', () => {
+      window.location.href = '/admin.html';
+    });
+
+    // Hover effect for admin button
+    adminPanelBtn.addEventListener('mouseenter', (e) => {
+      (e.target as HTMLButtonElement).style.transform = 'translateY(-2px)';
+      (e.target as HTMLButtonElement).style.boxShadow = '0 6px 20px rgba(245, 158, 11, 0.6)';
+    });
+    adminPanelBtn.addEventListener('mouseleave', (e) => {
+      (e.target as HTMLButtonElement).style.transform = 'translateY(0)';
+      (e.target as HTMLButtonElement).style.boxShadow = '0 4px 15px rgba(245, 158, 11, 0.4)';
+    });
+  }
 
   // Hover effects
   logoutBtn.addEventListener('mouseenter', (e) => {
@@ -80,6 +156,9 @@ async function initApp() {
 
   // Load appointments
   await loadAppointments();
+
+  // Initialize chatbot
+  initChatbot();
 }
 
 async function loadAppointments() {
@@ -225,4 +304,159 @@ async function loadAppointments() {
 function logout() {
   TokenManager.remove();
   window.location.href = '/login.html';
+}
+
+function initChatbot() {
+  const chatbotToggle = document.getElementById('chatbotToggle')!;
+  const chatbotContainer = document.getElementById('chatbotContainer')!;
+  const closeChatBtn = document.getElementById('closeChatBtn')!;
+  const chatInput = document.getElementById('chatInput') as HTMLInputElement;
+  const sendChatBtn = document.getElementById('sendChatBtn')!;
+  const chatMessages = document.getElementById('chatMessages')!;
+
+  let isChatOpen = false;
+
+  // Toggle chatbot
+  chatbotToggle.addEventListener('click', () => {
+    isChatOpen = !isChatOpen;
+    if (isChatOpen) {
+      chatbotContainer.style.display = 'flex';
+      chatbotToggle.textContent = '✕';
+      chatInput.focus();
+    } else {
+      chatbotContainer.style.display = 'none';
+      chatbotToggle.textContent = '💬';
+    }
+  });
+
+  // Close chatbot
+  closeChatBtn.addEventListener('click', () => {
+    isChatOpen = false;
+    chatbotContainer.style.display = 'none';
+    chatbotToggle.textContent = '💬';
+  });
+
+  // Hover effects
+  chatbotToggle.addEventListener('mouseenter', (e) => {
+    (e.target as HTMLButtonElement).style.transform = 'scale(1.1)';
+    (e.target as HTMLButtonElement).style.boxShadow = '0 12px 32px rgba(102, 126, 234, 0.7)';
+  });
+  chatbotToggle.addEventListener('mouseleave', (e) => {
+    (e.target as HTMLButtonElement).style.transform = 'scale(1)';
+    (e.target as HTMLButtonElement).style.boxShadow = '0 8px 24px rgba(102, 126, 234, 0.5)';
+  });
+
+  closeChatBtn.addEventListener('mouseenter', (e) => {
+    (e.target as HTMLButtonElement).style.background = 'rgba(255,255,255,0.3)';
+  });
+  closeChatBtn.addEventListener('mouseleave', (e) => {
+    (e.target as HTMLButtonElement).style.background = 'rgba(255,255,255,0.2)';
+  });
+
+  chatInput.addEventListener('focus', () => {
+    chatInput.style.borderColor = '#667eea';
+    chatInput.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.2)';
+  });
+  chatInput.addEventListener('blur', () => {
+    chatInput.style.borderColor = '#3a3a5a';
+    chatInput.style.boxShadow = 'none';
+  });
+
+  sendChatBtn.addEventListener('mouseenter', (e) => {
+    (e.target as HTMLButtonElement).style.transform = 'scale(1.05)';
+  });
+  sendChatBtn.addEventListener('mouseleave', (e) => {
+    (e.target as HTMLButtonElement).style.transform = 'scale(1)';
+  });
+
+  // Send message function
+  async function sendMessage() {
+    const message = chatInput.value.trim();
+    if (!message) return;
+
+    // Add user message to chat
+    addMessageToChat(message, true);
+    chatInput.value = '';
+
+    // Show loading indicator
+    const loadingId = addLoadingMessage();
+
+    try {
+      const response = await sendChatMessage(message);
+      removeLoadingMessage(loadingId);
+      addMessageToChat(response, false);
+    } catch (error) {
+      removeLoadingMessage(loadingId);
+      addMessageToChat('Üzgünüm, bir hata oluştu. Lütfen tekrar deneyin.', false);
+    }
+  }
+
+  // Send message on button click
+  sendChatBtn.addEventListener('click', sendMessage);
+
+  // Send message on Enter key
+  chatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      sendMessage();
+    }
+  });
+
+  // Helper functions
+  function addMessageToChat(message: string, isUser: boolean) {
+    const messageDiv = document.createElement('div');
+    messageDiv.style.display = 'flex';
+    messageDiv.style.gap = '12px';
+    messageDiv.style.alignItems = 'flex-start';
+
+    if (isUser) {
+      messageDiv.style.flexDirection = 'row-reverse';
+      messageDiv.innerHTML = `
+        <div style="font-size: 24px; flex-shrink: 0;">👤</div>
+        <div style="background: rgba(118, 75, 162, 0.3); color: #f0e0ff; padding: 12px 16px; border-radius: 12px; font-size: 14px; max-width: 80%; border: 1px solid rgba(118, 75, 162, 0.4); text-align: left;">
+          ${escapeHtml(message)}
+        </div>
+      `;
+    } else {
+      messageDiv.innerHTML = `
+        <div style="font-size: 24px; flex-shrink: 0;">🤖</div>
+        <div style="background: rgba(102, 126, 234, 0.2); color: #e0e0ff; padding: 12px 16px; border-radius: 12px; font-size: 14px; max-width: 80%; border: 1px solid rgba(102, 126, 234, 0.3);">
+          ${escapeHtml(message)}
+        </div>
+      `;
+    }
+
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function addLoadingMessage(): string {
+    const loadingId = 'loading-' + Date.now();
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = loadingId;
+    loadingDiv.style.display = 'flex';
+    loadingDiv.style.gap = '12px';
+    loadingDiv.style.alignItems = 'flex-start';
+    loadingDiv.innerHTML = `
+      <div style="font-size: 24px; flex-shrink: 0;">🤖</div>
+      <div style="background: rgba(102, 126, 234, 0.2); color: #e0e0ff; padding: 12px 16px; border-radius: 12px; font-size: 14px; max-width: 80%; border: 1px solid rgba(102, 126, 234, 0.3);">
+        <span style="opacity: 0.6;">Yazıyor...</span>
+      </div>
+    `;
+    chatMessages.appendChild(loadingDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    return loadingId;
+  }
+
+  function removeLoadingMessage(loadingId: string) {
+    const loadingElement = document.getElementById(loadingId);
+    if (loadingElement) {
+      loadingElement.remove();
+    }
+  }
+
+  function escapeHtml(text: string): string {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
 }

@@ -56,7 +56,6 @@ public class AddDoctorController : ControllerBase
 
             var response = await context.CreateDoctor(doctor);
 
-            // Invalidate all doctor-related caches
             await redisService.DeleteByPatternAsync("doctors:*");
             if (response?.id != null)
             {

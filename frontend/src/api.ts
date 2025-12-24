@@ -1,6 +1,7 @@
-import type { LoginRequest, LoginResponse, RegisterRequest, RegisterResponse, ErrorResponse, GetAppointmentsResponse, GetDoctorsResponse, GetDoctorsExpertiseResponse, CreateAppointmentRequest, CreateAppointmentResponse, GetDoctorAppointmentsResponse } from './types';
+import type { LoginRequest, LoginResponse, RegisterRequest, RegisterResponse, ErrorResponse, GetAppointmentsResponse, GetDoctorsResponse, GetDoctorsExpertiseResponse, CreateAppointmentRequest, CreateAppointmentResponse, GetDoctorAppointmentsResponse, GetUserRoleResponse } from './types';
 
-const API_BASE_URL = 'http://localhost:5084/api';
+const API_BASE_URL = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:5084'}/api`;
+const CHATBOT_URL = import.meta.env.VITE_CHATBOT_URL || 'http://localhost:8080';
 
 export class ApiError extends Error {
   statusCode: number;
@@ -130,6 +131,37 @@ export async function createAppointment(appointmentData: CreateAppointmentReques
   });
 
   return handleResponse<CreateAppointmentResponse>(response);
+}
+
+export async function sendChatMessage(message: string): Promise<string> {
+  const response = await fetch(`${CHATBOT_URL}/api/input`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ input: message }),
+  });
+
+  if (!response.ok) {
+    throw new ApiError(response.status, 'Chatbot yanıt veremedi');
+  }
+
+  const data = await response.json();
+  return data.response || data.message || 'Yanıt alınamadı';
+}
+
+export async function getUserRole(): Promise<GetUserRoleResponse> {
+  const token = TokenManager.get();
+
+  const response = await fetch(`${API_BASE_URL}/get/user/role`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  return handleResponse<GetUserRoleResponse>(response);
 }
 
 // Token Management

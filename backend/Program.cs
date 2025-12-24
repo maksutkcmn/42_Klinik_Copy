@@ -4,8 +4,28 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Services;
 using Utils;
+using DotNetEnv;
+
+// .env dosyasını yükle
+Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
+
+// .env değerlerini configuration'a override et
+builder.Configuration["ConnectionStrings:DefaultConnection"] =
+    $"Server={Environment.GetEnvironmentVariable("DB_SERVER") ?? "localhost"};" +
+    $"Database={Environment.GetEnvironmentVariable("DB_NAME") ?? "klinik"};" +
+    $"User={Environment.GetEnvironmentVariable("DB_USER") ?? "root"};" +
+    $"Password={Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "1234"};";
+
+builder.Configuration["JwtSettings:SecretKey"] = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") ?? "BuCokGizliBirAnahtarOlmaliEnAz32KarakterUzunlugunda";
+builder.Configuration["JwtSettings:Issuer"] = Environment.GetEnvironmentVariable("JWT_ISSUER") ?? "KlinikAPI";
+builder.Configuration["JwtSettings:Audience"] = Environment.GetEnvironmentVariable("JWT_AUDIENCE") ?? "KlinikClient";
+builder.Configuration["JwtSettings:ExpirationMinutes"] = Environment.GetEnvironmentVariable("JWT_EXPIRATION_MINUTES") ?? "60";
+
+builder.Configuration["Redis:Enabled"] = Environment.GetEnvironmentVariable("REDIS_ENABLED") ?? "true";
+builder.Configuration["Redis:ConnectionString"] = Environment.GetEnvironmentVariable("REDIS_CONNECTION_STRING") ?? "localhost:6379";
+builder.Configuration["Redis:DefaultExpirationDays"] = Environment.GetEnvironmentVariable("REDIS_DEFAULT_EXPIRATION_DAYS") ?? "7";
 
 builder.Services.AddOpenApi();
 

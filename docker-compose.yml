@@ -1,0 +1,104 @@
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: klinik-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-1234}
+      MYSQL_DATABASE: ${DB_NAME:-klinik}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_PASSWORD:-1234}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - klinik-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: klinik-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - klinik-network
+
+  # Backend (.NET)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: klinik-backend
+    environment:
+      - DB_SERVER=mysql
+      - DB_NAME=${DB_NAME:-klinik}
+      - DB_USER=${DB_USER:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-1234}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-BuCokGizliBirAnahtarOlmaliEnAz32KarakterUzunlugunda}
+      - JWT_ISSUER=${JWT_ISSUER:-KlinikAPI}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-KlinikClient}
+      - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-60}
+      - REDIS_ENABLED=${REDIS_ENABLED:-true}
+      - REDIS_CONNECTION_STRING=redis:6379
+      - REDIS_DEFAULT_EXPIRATION_DAYS=${REDIS_DEFAULT_EXPIRATION_DAYS:-7}
+      - ASPNETCORE_URLS=http://+:5084
+    ports:
+      - "5084:5084"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - klinik-network
+    restart: unless-stopped
+
+  # Chatbot (Spring Boot)
+  chatbot:
+    build:
+      context: ./chatbot
+      dockerfile: Dockerfile
+    container_name: klinik-chatbot
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SPRING_PROFILES_ACTIVE=prod
+    ports:
+      - "8080:8080"
+    networks:
+      - klinik-network
+    restart: unless-stopped
+
+  # Frontend (Vite + Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: klinik-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - chatbot
+    networks:
+      - klinik-network
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  redis-data:
+
+networks:
+  klinik-network:
+    driver: bridge
