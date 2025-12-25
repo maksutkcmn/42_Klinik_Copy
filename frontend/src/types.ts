@@ -96,3 +96,27 @@ export interface GetUserRoleResponse {
   message: string;
   userRole: string;
 }
+
+export interface AcquireLockRequest {
+  doctorId: number;
+  date: string;
+  time: string;
+}
+
+export interface AcquireLockResponse {
+  message: string;
+  lockAcquired: boolean;
+  lockKey: string;
+  lockValue: string;
+  expiresInSeconds: number;
+}
+
+export interface ReleaseLockRequest {
+  lockKey: string;
+  lockValue: string;
+}
+
+export interface ReleaseLockResponse {
+  message: string;
+  lockReleased: boolean;
+}

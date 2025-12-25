@@ -1,5 +1,5 @@
 import './style.css'
-import { TokenManager, getDoctorsExpertise, getDoctors, getDoctorsByExpertise, getDoctorAppointments, createAppointment, ApiError } from './api'
+import { TokenManager, getDoctorsExpertise, getDoctors, getDoctorsByExpertise, getDoctorAppointments, createAppointment, acquireLock, releaseLock, ApiError } from './api'
 import type { Doctor, Appointment } from './types'
 
 // Check if user is authenticated
@@ -536,222 +536,335 @@ async function bookAppointment(doctor: Doctor, date: string, time: string) {
   const modal = document.getElementById('appointmentModal')!;
   const modalContent = document.getElementById('modalContent')!;
 
-  // Show confirmation card
+  // Show loading state - acquiring lock
   modalContent.innerHTML = `
-    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px;">
-      <div style="background: rgba(30, 30, 50, 0.8); border: 2px solid #667eea; border-radius: 16px; padding: 32px; max-width: 500px; width: 100%; box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);">
-        <div style="text-align: center; margin-bottom: 24px;">
-          <div style="font-size: 48px; margin-bottom: 16px;">${doctor.gender === 'female' ? '👩‍⚕️' : '👨‍⚕️'}</div>
-          <h3 style="color: #fff; font-size: 22px; font-weight: 600; margin: 0 0 8px 0;">Randevu Onayı</h3>
-          <div style="color: #888; font-size: 14px;">Randevunuzu onaylamak üzeresiniz</div>
-        </div>
-
-        <div style="background: rgba(102, 126, 234, 0.1); border: 1px solid #667eea; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-          <div style="display: flex; flex-direction: column; gap: 12px;">
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <span style="font-size: 20px;">👨‍⚕️</span>
-              <div>
-                <div style="color: #888; font-size: 12px;">Doktor</div>
-                <div style="color: #fff; font-size: 16px; font-weight: 500;">${doctor.name}</div>
-              </div>
-            </div>
-            <div style="height: 1px; background: rgba(102, 126, 234, 0.2);"></div>
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <span style="font-size: 20px;">📅</span>
-              <div>
-                <div style="color: #888; font-size: 12px;">Tarih</div>
-                <div style="color: #fff; font-size: 16px; font-weight: 500;">${formatDateReadable(new Date(date))}</div>
-              </div>
-            </div>
-            <div style="height: 1px; background: rgba(102, 126, 234, 0.2);"></div>
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <span style="font-size: 20px;">🕐</span>
-              <div>
-                <div style="color: #888; font-size: 12px;">Saat</div>
-                <div style="color: #fff; font-size: 16px; font-weight: 500;">${time}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style="display: flex; gap: 12px;">
-          <button id="cancelBooking" style="flex: 1; background: rgba(220, 53, 69, 0.1); color: #dc3545; border: 2px solid #dc3545; padding: 14px 24px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
-            İptal
-          </button>
-          <button id="confirmBooking" style="flex: 1; background: #667eea; color: #fff; border: none; padding: 14px 24px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
-            Onayla
-          </button>
-        </div>
-      </div>
+    <div style="text-align: center; padding: 60px 20px; color: #888;">
+      <div style="font-size: 18px; margin-bottom: 12px;">🔒</div>
+      <div style="font-size: 16px;">Randevu slotu kilitleniyor...</div>
     </div>
   `;
 
-  const cancelBtn = document.getElementById('cancelBooking')!;
-  const confirmBtn = document.getElementById('confirmBooking')!;
+  let lockKey: string | null = null;
+  let lockValue: string | null = null;
 
-  // Cancel button handlers
-  cancelBtn.addEventListener('click', async () => {
-    // Reload appointment slots
-    const response = await getDoctorAppointments(doctor.id);
-    const appointments = response.appointments || [];
-    renderAppointmentSlots(doctor, appointments);
-  });
+  try {
+    // Step 1: Acquire lock
+    const lockResponse = await acquireLock({
+      doctorId: doctor.id,
+      date: date,
+      time: time
+    });
 
-  cancelBtn.addEventListener('mouseenter', () => {
-    (cancelBtn as HTMLButtonElement).style.background = '#dc3545';
-    (cancelBtn as HTMLButtonElement).style.color = '#fff';
-  });
-  cancelBtn.addEventListener('mouseleave', () => {
-    (cancelBtn as HTMLButtonElement).style.background = 'rgba(220, 53, 69, 0.1)';
-    (cancelBtn as HTMLButtonElement).style.color = '#dc3545';
-  });
+    if (!lockResponse.lockAcquired) {
+      throw new ApiError(409, 'Bu randevu slotu şu anda başka bir kullanıcı tarafından işleniyor. Lütfen tekrar deneyin.');
+    }
 
-  // Confirm button handlers
-  confirmBtn.addEventListener('mouseenter', () => {
-    (confirmBtn as HTMLButtonElement).style.background = '#5568d3';
-    (confirmBtn as HTMLButtonElement).style.transform = 'scale(1.02)';
-  });
-  confirmBtn.addEventListener('mouseleave', () => {
-    (confirmBtn as HTMLButtonElement).style.background = '#667eea';
-    (confirmBtn as HTMLButtonElement).style.transform = 'scale(1)';
-  });
+    lockKey = lockResponse.lockKey;
+    lockValue = lockResponse.lockValue;
 
-  confirmBtn.addEventListener('click', async () => {
-    // Show loading state
+    // Show confirmation card after lock acquired
     modalContent.innerHTML = `
-      <div style="text-align: center; padding: 60px 20px; color: #888;">
-        <div style="font-size: 18px; margin-bottom: 12px;">⏳</div>
-        <div style="font-size: 16px;">Randevu oluşturuluyor...</div>
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px;">
+        <div style="background: rgba(30, 30, 50, 0.8); border: 2px solid #667eea; border-radius: 16px; padding: 32px; max-width: 500px; width: 100%; box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);">
+          <div style="text-align: center; margin-bottom: 24px;">
+            <div style="font-size: 48px; margin-bottom: 16px;">${doctor.gender === 'female' ? '👩‍⚕️' : '👨‍⚕️'}</div>
+            <h3 style="color: #fff; font-size: 22px; font-weight: 600; margin: 0 0 8px 0;">Randevu Onayı</h3>
+            <div style="color: #888; font-size: 14px;">Randevunuzu onaylamak üzeresiniz</div>
+            <div style="color: #667eea; font-size: 12px; margin-top: 8px;">🔒 Slot kilitlendi (30 saniye)</div>
+          </div>
+
+          <div style="background: rgba(102, 126, 234, 0.1); border: 1px solid #667eea; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 20px;">👨‍⚕️</span>
+                <div>
+                  <div style="color: #888; font-size: 12px;">Doktor</div>
+                  <div style="color: #fff; font-size: 16px; font-weight: 500;">${doctor.name}</div>
+                </div>
+              </div>
+              <div style="height: 1px; background: rgba(102, 126, 234, 0.2);"></div>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 20px;">📅</span>
+                <div>
+                  <div style="color: #888; font-size: 12px;">Tarih</div>
+                  <div style="color: #fff; font-size: 16px; font-weight: 500;">${formatDateReadable(new Date(date))}</div>
+                </div>
+              </div>
+              <div style="height: 1px; background: rgba(102, 126, 234, 0.2);"></div>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 20px;">🕐</span>
+                <div>
+                  <div style="color: #888; font-size: 12px;">Saat</div>
+                  <div style="color: #fff; font-size: 16px; font-weight: 500;">${time}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 12px;">
+            <button id="cancelBooking" style="flex: 1; background: rgba(220, 53, 69, 0.1); color: #dc3545; border: 2px solid #dc3545; padding: 14px 24px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">
+              İptal
+            </button>
+            <button id="confirmBooking" style="flex: 1; background: #667eea; color: #fff; border: none; padding: 14px 24px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
+              Onayla
+            </button>
+          </div>
+        </div>
       </div>
     `;
 
-    try {
-      await createAppointment({
-        doctorId: doctor.id,
-        date: date,
-        time: time
-      });
+    const cancelBtn = document.getElementById('cancelBooking')!;
+    const confirmBtn = document.getElementById('confirmBooking')!;
 
-      // Show success message
+    // Cancel button handlers
+    cancelBtn.addEventListener('click', async () => {
+      // Release lock before canceling
+      if (lockKey && lockValue) {
+        try {
+          await releaseLock({ lockKey, lockValue });
+        } catch (error) {
+          console.error('Failed to release lock:', error);
+        }
+      }
+
+      // Reload appointment slots
+      const response = await getDoctorAppointments(doctor.id);
+      const appointments = response.appointments || [];
+      renderAppointmentSlots(doctor, appointments);
+    });
+
+    cancelBtn.addEventListener('mouseenter', () => {
+      (cancelBtn as HTMLButtonElement).style.background = '#dc3545';
+      (cancelBtn as HTMLButtonElement).style.color = '#fff';
+    });
+    cancelBtn.addEventListener('mouseleave', () => {
+      (cancelBtn as HTMLButtonElement).style.background = 'rgba(220, 53, 69, 0.1)';
+      (cancelBtn as HTMLButtonElement).style.color = '#dc3545';
+    });
+
+    // Confirm button handlers
+    confirmBtn.addEventListener('mouseenter', () => {
+      (confirmBtn as HTMLButtonElement).style.background = '#5568d3';
+      (confirmBtn as HTMLButtonElement).style.transform = 'scale(1.02)';
+    });
+    confirmBtn.addEventListener('mouseleave', () => {
+      (confirmBtn as HTMLButtonElement).style.background = '#667eea';
+      (confirmBtn as HTMLButtonElement).style.transform = 'scale(1)';
+    });
+
+    confirmBtn.addEventListener('click', async () => {
+      // Show loading state
+      modalContent.innerHTML = `
+        <div style="text-align: center; padding: 60px 20px; color: #888;">
+          <div style="font-size: 18px; margin-bottom: 12px;">⏳</div>
+          <div style="font-size: 16px;">Randevu oluşturuluyor...</div>
+        </div>
+      `;
+
+      try {
+        // Step 2: Create appointment
+        await createAppointment({
+          doctorId: doctor.id,
+          date: date,
+          time: time
+        });
+
+        // Step 3: Release lock after successful creation
+        if (lockKey && lockValue) {
+          try {
+            await releaseLock({ lockKey, lockValue });
+          } catch (error) {
+            console.error('Failed to release lock:', error);
+          }
+        }
+
+        // Show success message
+        modalContent.innerHTML = `
+          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px;">
+            <div style="background: linear-gradient(135deg, rgba(40, 167, 69, 0.1) 0%, rgba(34, 139, 34, 0.1) 100%); border: 2px solid #28a745; border-radius: 16px; padding: 40px; max-width: 500px; width: 100%; text-align: center; box-shadow: 0 8px 32px rgba(40, 167, 69, 0.3);">
+              <div style="background: rgba(40, 167, 69, 0.2); width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;">
+                <div style="font-size: 48px;">✅</div>
+              </div>
+              <h3 style="color: #28a745; font-size: 26px; font-weight: 700; margin: 0 0 12px 0;">Randevu Başarıyla Oluşturuldu!</h3>
+              <div style="color: #aaa; font-size: 15px; margin-bottom: 24px; line-height: 1.6;">
+                ${doctor.name} ile <strong style="color: #fff;">${formatDateReadable(new Date(date))}</strong> tarihinde saat <strong style="color: #fff;">${time}</strong> için randevunuz oluşturuldu.
+              </div>
+              <div style="background: rgba(40, 167, 69, 0.1); border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                <div style="color: #888; font-size: 13px; margin-bottom: 4px;">Randevu kodunuz e-posta adresinize gönderildi</div>
+              </div>
+              <button id="closeSuccessBtn" style="background: #28a745; color: #fff; border: none; padding: 14px 40px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);">
+                Tamam
+              </button>
+            </div>
+          </div>
+        `;
+
+        const closeBtn = document.getElementById('closeSuccessBtn')!;
+        closeBtn.addEventListener('click', () => {
+          modal.style.animation = 'fadeOut 0.3s ease';
+          setTimeout(() => modal.remove(), 300);
+        });
+
+        closeBtn.addEventListener('mouseenter', () => {
+          (closeBtn as HTMLButtonElement).style.background = '#218838';
+          (closeBtn as HTMLButtonElement).style.transform = 'scale(1.05)';
+        });
+        closeBtn.addEventListener('mouseleave', () => {
+          (closeBtn as HTMLButtonElement).style.background = '#28a745';
+          (closeBtn as HTMLButtonElement).style.transform = 'scale(1)';
+        });
+
+      } catch (error) {
+        // Release lock on error
+        if (lockKey && lockValue) {
+          try {
+            await releaseLock({ lockKey, lockValue });
+          } catch (err) {
+            console.error('Failed to release lock on error:', err);
+          }
+        }
+
+        if (error instanceof ApiError) {
+          if (error.statusCode === 401) {
+            TokenManager.remove();
+            window.location.href = '/login.html';
+            return;
+          }
+
+          modalContent.innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px;">
+              <div style="background: linear-gradient(135deg, rgba(220, 53, 69, 0.1) 0%, rgba(200, 35, 51, 0.1) 100%); border: 2px solid #dc3545; border-radius: 16px; padding: 40px; max-width: 500px; width: 100%; text-align: center; box-shadow: 0 8px 32px rgba(220, 53, 69, 0.3);">
+                <div style="background: rgba(220, 53, 69, 0.2); width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;">
+                  <div style="font-size: 48px;">❌</div>
+                </div>
+                <h3 style="color: #dc3545; font-size: 24px; font-weight: 700; margin: 0 0 12px 0;">Randevu Oluşturulamadı</h3>
+                <div style="color: #aaa; font-size: 15px; margin-bottom: 28px; line-height: 1.6;">
+                  ${error.message}
+                </div>
+                <button id="tryAgainBtn" style="background: #667eea; color: #fff; border: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
+                  Tekrar Dene
+                </button>
+              </div>
+            </div>
+          `;
+
+          const tryAgainBtn = document.getElementById('tryAgainBtn')!;
+          tryAgainBtn.addEventListener('click', async () => {
+            // Reload appointment slots
+            try {
+              const response = await getDoctorAppointments(doctor.id);
+              const appointments = response.appointments || [];
+              renderAppointmentSlots(doctor, appointments);
+            } catch (err) {
+              modalContent.innerHTML = `
+                <div style="text-align: center; padding: 60px 20px; color: #dc3545;">
+                  <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+                  <div style="font-size: 18px; font-weight: 600;">Bir hata oluştu. Lütfen modalı kapatıp tekrar deneyin.</div>
+                </div>
+              `;
+            }
+          });
+
+          tryAgainBtn.addEventListener('mouseenter', () => {
+            (tryAgainBtn as HTMLButtonElement).style.background = '#5568d3';
+            (tryAgainBtn as HTMLButtonElement).style.transform = 'scale(1.05)';
+          });
+          tryAgainBtn.addEventListener('mouseleave', () => {
+            (tryAgainBtn as HTMLButtonElement).style.background = '#667eea';
+            (tryAgainBtn as HTMLButtonElement).style.transform = 'scale(1)';
+          });
+
+        } else {
+          modalContent.innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px;">
+              <div style="background: linear-gradient(135deg, rgba(220, 53, 69, 0.1) 0%, rgba(200, 35, 51, 0.1) 100%); border: 2px solid #dc3545; border-radius: 16px; padding: 40px; max-width: 500px; width: 100%; text-align: center; box-shadow: 0 8px 32px rgba(220, 53, 69, 0.3);">
+                <div style="background: rgba(220, 53, 69, 0.2); width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;">
+                  <div style="font-size: 48px;">⚠️</div>
+                </div>
+                <h3 style="color: #dc3545; font-size: 24px; font-weight: 700; margin: 0 0 12px 0;">Bir Hata Oluştu</h3>
+                <div style="color: #aaa; font-size: 15px; margin-bottom: 28px; line-height: 1.6;">
+                  Randevu oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.
+                </div>
+                <button id="closeErrorBtn" style="background: #dc3545; color: #fff; border: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);">
+                  Kapat
+                </button>
+              </div>
+            </div>
+          `;
+
+          const closeErrorBtn = document.getElementById('closeErrorBtn')!;
+          closeErrorBtn.addEventListener('click', () => {
+            modal.style.animation = 'fadeOut 0.3s ease';
+            setTimeout(() => modal.remove(), 300);
+          });
+
+          closeErrorBtn.addEventListener('mouseenter', () => {
+            (closeErrorBtn as HTMLButtonElement).style.background = '#c82333';
+            (closeErrorBtn as HTMLButtonElement).style.transform = 'scale(1.05)';
+          });
+          closeErrorBtn.addEventListener('mouseleave', () => {
+            (closeErrorBtn as HTMLButtonElement).style.background = '#dc3545';
+            (closeErrorBtn as HTMLButtonElement).style.transform = 'scale(1)';
+          });
+        }
+      }
+    });
+
+  } catch (error) {
+    // Release lock on outer error (e.g., lock acquisition failure)
+    if (lockKey && lockValue) {
+      try {
+        await releaseLock({ lockKey, lockValue });
+      } catch (err) {
+        console.error('Failed to release lock on outer error:', err);
+      }
+    }
+
+    if (error instanceof ApiError) {
+      if (error.statusCode === 401) {
+        TokenManager.remove();
+        window.location.href = '/login.html';
+        return;
+      }
+
       modalContent.innerHTML = `
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px;">
-          <div style="background: linear-gradient(135deg, rgba(40, 167, 69, 0.1) 0%, rgba(34, 139, 34, 0.1) 100%); border: 2px solid #28a745; border-radius: 16px; padding: 40px; max-width: 500px; width: 100%; text-align: center; box-shadow: 0 8px 32px rgba(40, 167, 69, 0.3);">
-            <div style="background: rgba(40, 167, 69, 0.2); width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;">
-              <div style="font-size: 48px;">✅</div>
+          <div style="background: linear-gradient(135deg, rgba(220, 53, 69, 0.1) 0%, rgba(200, 35, 51, 0.1) 100%); border: 2px solid #dc3545; border-radius: 16px; padding: 40px; max-width: 500px; width: 100%; text-align: center; box-shadow: 0 8px 32px rgba(220, 53, 69, 0.3);">
+            <div style="background: rgba(220, 53, 69, 0.2); width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;">
+              <div style="font-size: 48px;">🔒</div>
             </div>
-            <h3 style="color: #28a745; font-size: 26px; font-weight: 700; margin: 0 0 12px 0;">Randevu Başarıyla Oluşturuldu!</h3>
-            <div style="color: #aaa; font-size: 15px; margin-bottom: 24px; line-height: 1.6;">
-              ${doctor.name} ile <strong style="color: #fff;">${formatDateReadable(new Date(date))}</strong> tarihinde saat <strong style="color: #fff;">${time}</strong> için randevunuz oluşturuldu.
+            <h3 style="color: #dc3545; font-size: 24px; font-weight: 700; margin: 0 0 12px 0;">Slot Kilitlenemedi</h3>
+            <div style="color: #aaa; font-size: 15px; margin-bottom: 28px; line-height: 1.6;">
+              ${error.message}
             </div>
-            <div style="background: rgba(40, 167, 69, 0.1); border-radius: 8px; padding: 16px; margin-bottom: 24px;">
-              <div style="color: #888; font-size: 13px; margin-bottom: 4px;">Randevu kodunuz e-posta adresinize gönderildi</div>
-            </div>
-            <button id="closeSuccessBtn" style="background: #28a745; color: #fff; border: none; padding: 14px 40px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);">
-              Tamam
+            <button id="closeLockErrorBtn" style="background: #667eea; color: #fff; border: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
+              Kapat
             </button>
           </div>
         </div>
       `;
 
-      const closeBtn = document.getElementById('closeSuccessBtn')!;
-      closeBtn.addEventListener('click', () => {
+      const closeLockErrorBtn = document.getElementById('closeLockErrorBtn')!;
+      closeLockErrorBtn.addEventListener('click', () => {
         modal.style.animation = 'fadeOut 0.3s ease';
         setTimeout(() => modal.remove(), 300);
       });
 
-      closeBtn.addEventListener('mouseenter', () => {
-        (closeBtn as HTMLButtonElement).style.background = '#218838';
-        (closeBtn as HTMLButtonElement).style.transform = 'scale(1.05)';
+      closeLockErrorBtn.addEventListener('mouseenter', () => {
+        (closeLockErrorBtn as HTMLButtonElement).style.background = '#5568d3';
+        (closeLockErrorBtn as HTMLButtonElement).style.transform = 'scale(1.05)';
       });
-      closeBtn.addEventListener('mouseleave', () => {
-        (closeBtn as HTMLButtonElement).style.background = '#28a745';
-        (closeBtn as HTMLButtonElement).style.transform = 'scale(1)';
+      closeLockErrorBtn.addEventListener('mouseleave', () => {
+        (closeLockErrorBtn as HTMLButtonElement).style.background = '#667eea';
+        (closeLockErrorBtn as HTMLButtonElement).style.transform = 'scale(1)';
       });
-
-    } catch (error) {
-      if (error instanceof ApiError) {
-        if (error.statusCode === 401) {
-          TokenManager.remove();
-          window.location.href = '/login.html';
-          return;
-        }
-
-        modalContent.innerHTML = `
-          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px;">
-            <div style="background: linear-gradient(135deg, rgba(220, 53, 69, 0.1) 0%, rgba(200, 35, 51, 0.1) 100%); border: 2px solid #dc3545; border-radius: 16px; padding: 40px; max-width: 500px; width: 100%; text-align: center; box-shadow: 0 8px 32px rgba(220, 53, 69, 0.3);">
-              <div style="background: rgba(220, 53, 69, 0.2); width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;">
-                <div style="font-size: 48px;">❌</div>
-              </div>
-              <h3 style="color: #dc3545; font-size: 24px; font-weight: 700; margin: 0 0 12px 0;">Randevu Oluşturulamadı</h3>
-              <div style="color: #aaa; font-size: 15px; margin-bottom: 28px; line-height: 1.6;">
-                ${error.message}
-              </div>
-              <button id="tryAgainBtn" style="background: #667eea; color: #fff; border: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
-                Tekrar Dene
-              </button>
-            </div>
-          </div>
-        `;
-
-        const tryAgainBtn = document.getElementById('tryAgainBtn')!;
-        tryAgainBtn.addEventListener('click', async () => {
-          // Reload appointment slots
-          try {
-            const response = await getDoctorAppointments(doctor.id);
-            const appointments = response.appointments || [];
-            renderAppointmentSlots(doctor, appointments);
-          } catch (err) {
-            modalContent.innerHTML = `
-              <div style="text-align: center; padding: 60px 20px; color: #dc3545;">
-                <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
-                <div style="font-size: 18px; font-weight: 600;">Bir hata oluştu. Lütfen modalı kapatıp tekrar deneyin.</div>
-              </div>
-            `;
-          }
-        });
-
-        tryAgainBtn.addEventListener('mouseenter', () => {
-          (tryAgainBtn as HTMLButtonElement).style.background = '#5568d3';
-          (tryAgainBtn as HTMLButtonElement).style.transform = 'scale(1.05)';
-        });
-        tryAgainBtn.addEventListener('mouseleave', () => {
-          (tryAgainBtn as HTMLButtonElement).style.background = '#667eea';
-          (tryAgainBtn as HTMLButtonElement).style.transform = 'scale(1)';
-        });
-
-      } else {
-        modalContent.innerHTML = `
-          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px;">
-            <div style="background: linear-gradient(135deg, rgba(220, 53, 69, 0.1) 0%, rgba(200, 35, 51, 0.1) 100%); border: 2px solid #dc3545; border-radius: 16px; padding: 40px; max-width: 500px; width: 100%; text-align: center; box-shadow: 0 8px 32px rgba(220, 53, 69, 0.3);">
-              <div style="background: rgba(220, 53, 69, 0.2); width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;">
-                <div style="font-size: 48px;">⚠️</div>
-              </div>
-              <h3 style="color: #dc3545; font-size: 24px; font-weight: 700; margin: 0 0 12px 0;">Bir Hata Oluştu</h3>
-              <div style="color: #aaa; font-size: 15px; margin-bottom: 28px; line-height: 1.6;">
-                Randevu oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.
-              </div>
-              <button id="closeErrorBtn" style="background: #dc3545; color: #fff; border: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);">
-                Kapat
-              </button>
-            </div>
-          </div>
-        `;
-
-        const closeErrorBtn = document.getElementById('closeErrorBtn')!;
-        closeErrorBtn.addEventListener('click', () => {
-          modal.style.animation = 'fadeOut 0.3s ease';
-          setTimeout(() => modal.remove(), 300);
-        });
-
-        closeErrorBtn.addEventListener('mouseenter', () => {
-          (closeErrorBtn as HTMLButtonElement).style.background = '#c82333';
-          (closeErrorBtn as HTMLButtonElement).style.transform = 'scale(1.05)';
-        });
-        closeErrorBtn.addEventListener('mouseleave', () => {
-          (closeErrorBtn as HTMLButtonElement).style.background = '#dc3545';
-          (closeErrorBtn as HTMLButtonElement).style.transform = 'scale(1)';
-        });
-      }
+    } else {
+      modalContent.innerHTML = `
+        <div style="text-align: center; padding: 60px 20px; color: #dc3545;">
+          <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+          <div style="font-size: 18px; font-weight: 600;">Bir hata oluştu. Lütfen tekrar deneyin.</div>
+        </div>
+      `;
     }
-  });
+  }
 }

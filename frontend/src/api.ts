@@ -1,4 +1,4 @@
-import type { LoginRequest, LoginResponse, RegisterRequest, RegisterResponse, ErrorResponse, GetAppointmentsResponse, GetDoctorsResponse, GetDoctorsExpertiseResponse, CreateAppointmentRequest, CreateAppointmentResponse, GetDoctorAppointmentsResponse, GetUserRoleResponse } from './types';
+import type { LoginRequest, LoginResponse, RegisterRequest, RegisterResponse, ErrorResponse, GetAppointmentsResponse, GetDoctorsResponse, GetDoctorsExpertiseResponse, CreateAppointmentRequest, CreateAppointmentResponse, GetDoctorAppointmentsResponse, GetUserRoleResponse, AcquireLockRequest, AcquireLockResponse, ReleaseLockRequest, ReleaseLockResponse } from './types';
 
 const API_BASE_URL = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:5084'}/api`;
 const CHATBOT_URL = import.meta.env.VITE_CHATBOT_URL || 'http://localhost:8080';
@@ -162,6 +162,36 @@ export async function getUserRole(): Promise<GetUserRoleResponse> {
   });
 
   return handleResponse<GetUserRoleResponse>(response);
+}
+
+export async function acquireLock(lockData: AcquireLockRequest): Promise<AcquireLockResponse> {
+  const token = TokenManager.get();
+
+  const response = await fetch(`${API_BASE_URL}/appointment/lock/acquire`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(lockData),
+  });
+
+  return handleResponse<AcquireLockResponse>(response);
+}
+
+export async function releaseLock(lockData: ReleaseLockRequest): Promise<ReleaseLockResponse> {
+  const token = TokenManager.get();
+
+  const response = await fetch(`${API_BASE_URL}/appointment/lock/release`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(lockData),
+  });
+
+  return handleResponse<ReleaseLockResponse>(response);
 }
 
 // Token Management
